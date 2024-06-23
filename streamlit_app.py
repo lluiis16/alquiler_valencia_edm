@@ -152,5 +152,5 @@ def main():
             st.write(
                 "Ten en cuenta que este promedio es teniendo en cuenta solo aquellos alquileres cuyo precio es inferior a 500 euros.")
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     main()
