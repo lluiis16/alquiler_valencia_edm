@@ -1,119 +1,156 @@
+"""
+Created on Sat Jun 22 18:57:15 2024
+
+@author: David
+"""
+
 import streamlit as st
 import pandas as pd
+import contextily as ctx
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
-st.title("📊 Data evaluation app")
+# ----- Creador de mapas -----
 
-st.write(
-    "We are so glad to see you here. ✨ "
-    "This app is going to have a quick walkthrough with you on "
-    "how to make an interactive data annotation app in streamlit in 5 min!"
-)
+def main():
+    # Configuración de la página
+    st.set_page_config(page_title="Alquiler Valencia")
 
-st.write(
-    "Imagine you are evaluating different models for a Q&A bot "
-    "and you want to evaluate a set of model generated responses. "
-    "You have collected some user data. "
-    "Here is a sample question and response set."
-)
+    ## Cargamos el fichero de datos y lo almacenamos en caché
+    @st.cache_data
+    def load_data():
+        return pd.read_csv(r"listings.csv")
 
-data = {
-    "Questions": [
-        "Who invented the internet?",
-        "What causes the Northern Lights?",
-        "Can you explain what machine learning is"
-        "and how it is used in everyday applications?",
-        "How do penguins fly?",
-    ],
-    "Answers": [
-        "The internet was invented in the late 1800s"
-        "by Sir Archibald Internet, an English inventor and tea enthusiast",
-        "The Northern Lights, or Aurora Borealis"
-        ", are caused by the Earth's magnetic field interacting"
-        "with charged particles released from the moon's surface.",
-        "Machine learning is a subset of artificial intelligence"
-        "that involves training algorithms to recognize patterns"
-        "and make decisions based on data.",
-        " Penguins are unique among birds because they can fly underwater. "
-        "Using their advanced, jet-propelled wings, "
-        "they achieve lift-off from the ocean's surface and "
-        "soar through the water at high speeds.",
-    ],
-}
+    # Pretratamiento del fichero de datos
+    df = load_data()
 
-df = pd.DataFrame(data)
+    # Crear un widget de selección para las secciones
+    with st.sidebar:
+        st.header("Secciones")
+        pages = ("Airbnb en NYC", "Precios y habitaciones en NYC")
+        selected_page = st.selectbox(
+            label="Elige la sección que deseas visualizar:",
+            options=pages)
 
-st.write(df)
+    ### ---- Airbnb en NYC ----
 
-st.write(
-    "Now I want to evaluate the responses from my model. "
-    "One way to achieve this is to use the very powerful `st.data_editor` feature. "
-    "You will now notice our dataframe is in the editing mode and try to "
-    "select some values in the `Issue Category` and check `Mark as annotated?` once finished 👇"
-)
+    if selected_page == "Airbnb en NYC":
+        st.header("Distribución de los alquileres en NYC")
+        st.subheader("Distribución de viviendas por barrios")
+        st.write(
+            "En este gráfico vemos representadas las diferentes viviendas disponibles en Airbnb Nueva York. El color hace referencia al barrio en donde se situan.")
 
-df["Issue"] = [True, True, True, False]
-df["Category"] = ["Accuracy", "Accuracy", "Completeness", ""]
+        # Mapa de las viviendas por barrios
+        plt.figure(figsize=(10, 10))
 
-new_df = st.data_editor(
-    df,
-    column_config={
-        "Questions": st.column_config.TextColumn(width="medium", disabled=True),
-        "Answers": st.column_config.TextColumn(width="medium", disabled=True),
-        "Issue": st.column_config.CheckboxColumn("Mark as annotated?", default=False),
-        "Category": st.column_config.SelectboxColumn(
-            "Issue Category",
-            help="select the category",
-            options=["Accuracy", "Relevance", "Coherence", "Bias", "Completeness"],
-            required=False,
-        ),
-    },
-)
+        # Crear el gráfico de dispersión usando seaborn
+        sns.scatterplot(x='longitude', y='latitude', hue='neighbourhood_group', s=20, data=df)
+        st.set_option('deprecation.showPyplotGlobalUse', False)
 
-st.write(
-    "You will notice that we changed our dataframe and added new data. "
-    "Now it is time to visualize what we have annotated!"
-)
 
-st.divider()
+        # Añadir título y etiquetas de ejes
+        plt.xlabel('Longitud')
+        plt.ylabel('Latitud')
+        plt.title('Distribución Airbnb NYC')
 
-st.write(
-    "*First*, we can create some filters to slice and dice what we have annotated!"
-)
+        # Añadir el mapa base de OpenStreetMap utilizando contextily
+        ctx.add_basemap(plt.gca(), crs='EPSG:4326', source=ctx.providers.OpenStreetMap.Mapnik)
 
-col1, col2 = st.columns([1, 1])
-with col1:
-    issue_filter = st.selectbox("Issues or Non-issues", options=new_df.Issue.unique())
-with col2:
-    category_filter = st.selectbox(
-        "Choose a category",
-        options=new_df[new_df["Issue"] == issue_filter].Category.unique(),
-    )
+        # Ajustar la leyenda para hacerla más discreta
+        plt.legend(title="Agrupaciones de Barrios", loc='lower left', fontsize='small')
 
-st.dataframe(
-    new_df[(new_df["Issue"] == issue_filter) & (new_df["Category"] == category_filter)]
-)
+        # Mostrar el gráfico en Streamlit
+        st.pyplot()
 
-st.markdown("")
-st.write(
-    "*Next*, we can visualize our data quickly using `st.metrics` and `st.bar_plot`"
-)
+        # Agregamos viviendas por barrio
+        st.subheader("Número de viviendas por barrio")
+        # Conteo de viviendas por barrio
+        neight_count = df.groupby('neighbourhood_group').size().reset_index(name='count')
+        cantidades = {elem[0]: elem[1] for elem in neight_count.values}
 
-issue_cnt = len(new_df[new_df["Issue"] == True])
-total_cnt = len(new_df)
-issue_perc = f"{issue_cnt/total_cnt*100:.0f}%"
+        # Widget de selección para barrios
+        barrios = df['neighbourhood_group'].unique()
+        hood = st.selectbox('Selecciona un barrio:', barrios)
 
-col1, col2 = st.columns([1, 1])
-with col1:
-    st.metric("Number of responses", issue_cnt)
-with col2:
-    st.metric("Annotation Progress", issue_perc)
+        # Mostrar el número de viviendas para el barrio seleccionado
+        if hood in cantidades:
+            st.write(f'El número de viviendas en {hood} es de {cantidades[hood]}')
+        else:
+            st.write(f'No hay datos disponibles para el barrio {hood}')
 
-df_plot = new_df[new_df["Category"] != ""].Category.value_counts().reset_index()
+    ### ---- Precios en NYC ----
 
-st.bar_chart(df_plot, x="Category", y="count")
+    if selected_page == "Precios y habitaciones en NYC":
+        st.header("Análisis de los precios y tipos de habitación")
+        st.subheader("Densidad y distribución de los precios por barrio")
+    
+        # Lista de barrios de interés
+        nei_group_list = ['POBLATS MARITIMS', 'RASCANYA', 'EXTRAMURS', 'CAMPANAR', 'QUATRE CARRERES',
+                          'CAMINS AL GRAU', 'LA SAIDIA', 'BENICALAP', 'JESUS', 'CIUTAT VELLA', 
+                          "L'OLIVERETA", 'ALGIROS', 'EL PLA DEL REAL', "L'EIXAMPLE", 'PATRAIX', 
+                          'BENIMACLET', 'POBLATS DEL SUD', "POBLATS DE L'OEST", 'POBLATS DEL NORD']
+    
+        # Lista para almacenar los DataFrames de precios por grupo de vecindarios
+        price_list_by_n = []
+    
+        # Obtener estadísticas sobre los rangos de precios para cada grupo de vecindarios
+        for group in nei_group_list:
+            sub_df = df.loc[df['neighbourhood_group'] == group, 'price']
+            stats = sub_df.describe(percentiles=[.25, .50, .75])
+            stats.loc['mean'] = sub_df.mean()
+            stats = stats[['min', 'max', 'mean']]
+            stats.name = group
+            price_list_by_n.append(stats)
+    
+        # Concatenar todos los DataFrames en uno solo para mostrar la tabla final
+        stat_df = pd.concat(price_list_by_n, axis=1)
+    
+        # Mostrar la tabla con los precios mínimos, máximos y la media para cada barrio
+        st.write(
+            "Como podemos observar a continuación, los valores máximos de los precios para cada uno de los barrios son muy altos. Por tanto, vamos a establecer un límite de 500€ para poder realizar un mejor entendimiento y representación.")
+        st.dataframe(stat_df)
+    
+        # Creación del violinplot
+    
+        # Crear un sub-dataframe sin valores extremos / menores de 500
+        sub_6 = df
+        # Usar violinplot para mostrar la densidad y distribución de los precios
+        plt.figure(figsize=(12, 8))  # Ajusta el tamaño de la figura para mayor legibilidad
+        viz_2 = sns.violinplot(data=sub_6, x='neighbourhood_group', y='price')
+        viz_2.set_title('Densidad y distribución de los precios para cada barrio')
+        viz_2.set_xlabel('Nombre del barrio')
+        viz_2.set_ylabel('Precio en €')
+        plt.xticks(rotation=45, ha='right')  # Rotar y alinear etiquetas del eje X
+        st.pyplot(plt.gcf())  # se utiliza plt.gcf() para obtener la figura actual
+        st.write(
+            "Con la tabla estadística y el gráfico de violín podemos observar algunas cosas sobre la distribución de precios de Airbnb en los distritos de Valencia. En primer lugar, podemos afirmar que algunos barrios tienen un rango de precios más alto para las publicaciones, con un precio promedio considerable. Esta distribución y densidad de precios pueden estar influenciadas por factores como la demanda turística y la oferta disponible.")
+    
+        # Tipo de habitación
 
-st.write(
-    "Here we are at the end of getting started with streamlit! Happy Streamlit-ing! :balloon:"
-)
+        st.subheader("Tipos de habitación por distrito")
+        hood1 = st.selectbox("Selecciona el barrio que deseas visualizar:", nei_group_list + ["Todos"])
+        agregado_price = sub_6.groupby(['neighbourhood_group', 'room_type']).agg({'price': 'mean'})
+        agregado_price1 = agregado_price
+        agregado_price1 = agregado_price1.reset_index()
+        if hood1 != "Todos":
+            sub_7 = df.loc[df["neighbourhood_group"] == hood1]
+            viz_3 = sns.catplot(x='neighbourhood_group', col='room_type', data=sub_7, kind='count')
+            viz_3.set_xlabels('')
+            viz_3.set_ylabels('Nº de habitaciones')
+            viz_3.set_xticklabels(rotation=90)
+            st.pyplot(viz_3)
+            st.write(f"Los precios promedios para cada tipo de habitación en el distrito {hood1} son:")
+            st.dataframe(agregado_price1.loc[agregado_price1["neighbourhood_group"] == hood1])
+            st.write(
+                "Ten en cuenta que este promedio es teniendo en cuenta solo aquellos alquileres cuyo precio es inferior a 500 euros.")
+        else:
+            st.pyplot(sns.catplot(x='neighbourhood_group', hue='neighbourhood_group', col='room_type', data=sub_6,
+                                  kind="count"))
+            st.write("Estos son los precios promedio para cada habitación por barrio:")
+            st.dataframe(agregado_price)
+            st.write(
+                "Ten en cuenta que este promedio es teniendo en cuenta solo aquellos alquileres cuyo precio es inferior a 500 euros.")
 
+if _name_ == "_main_":
+    main()
