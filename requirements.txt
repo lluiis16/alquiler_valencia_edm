@@ -4,4 +4,6 @@ geopandas
 contextily
 matplotlib
 seaborn
-sklearn
+scikit-learn
+shapely
+numpy
